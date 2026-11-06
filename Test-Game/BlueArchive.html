@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blue Archive Web(#0TMenf/dev)</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    background: #f2f3f5;
+    color: #1f2329;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .dialog {
+    width: 560px;
+    max-width: 100%;
+    padding: 32px;
+    background: #ffffff;
+    border: 1px solid #e3e5e8;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(31, 35, 41, 0.08);
+  }
+
+  .dialog[hidden] { display: none; }
+
+  .dialog__title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  .dialog__source {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: #8a919f;
+  }
+
+  /* ---------------- 加载阶段 ---------------- */
+
+  .steps {
+    list-style: none;
+    margin: 32px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #a8aeb8;
+    transition: color .2s ease;
+  }
+
+  .step__dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #d5d8dd;
+    transition: background .2s ease;
+  }
+
+  .step.is-active { color: #1f2329; }
+
+  .step.is-active .step__dot {
+    background: #2f6feb;
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  .step.is-done { color: #4a5058; }
+
+  .step.is-done .step__dot { background: #9aa1ab; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1;   transform: scale(1); }
+    50%      { opacity: .4;  transform: scale(.75); }
+  }
+
+  .servers {
+    margin-top: 16px;
+    padding-top: 8px;
+    border-top: 1px solid #eef0f3;
+    max-height: 256px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .servers::-webkit-scrollbar { width: 4px; }
+  .servers::-webkit-scrollbar-track { background: transparent; }
+  .servers::-webkit-scrollbar-thumb {
+    background: #d5d8dd;
+    border-radius: 2px;
+  }
+
+  .server {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 12px;
+    animation: fade-in .2s ease;
+  }
+
+  .server__name { color: #4a5058; }
+
+  .server__latency {
+    color: #8a919f;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(-2px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* ---------------- 下载阶段 ---------------- */
+
+  .tasks {
+    margin-top: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .task__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .task__name {
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .task__pct {
+    font-size: 12px;
+    color: #8a919f;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bar {
+    height: 8px;
+    margin-top: 8px;
+    background: #eef0f3;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .bar__fill {
+    height: 100%;
+    width: 0;
+    background: #2f6feb;
+    border-radius: 4px;
+  }
+
+  .task__foot {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 12px;
+    color: #8a919f;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .task.is-error .bar__fill { background: #d93a2b; }
+  .task.is-error .task__pct { color: #d93a2b; }
+  .task.is-paused .bar__fill { background: #c3c7cd; }
+
+  .alert {
+    margin-top: 16px;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: #fdf3f2;
+    border: 1px solid #f3c2bd;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+
+  .alert[hidden] { display: none; }
+
+  .alert__label {
+    color: #d93a2b;
+    font-weight: 500;
+  }
+
+  .alert__code {
+    color: #8a3b33;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+</style>
+</head>
+<body>
+
+  <!-- ================= 加载界面 ================= -->
+  <div class="dialog" id="loading-view" role="dialog" aria-live="polite">
+    <h1 class="dialog__title">正在初始化</h1>
+
+    <ol class="steps">
+      <li class="step" id="step-0">
+        <span class="step__dot"></span>
+        <span>正在获取可用服务器...</span>
+      </li>
+      <li class="step" id="step-1">
+        <span class="step__dot"></span>
+        <span>正在从 Pinkoc 服务器拉取请求...</span>
+      </li>
+      <li class="step" id="step-2">
+        <span class="step__dot"></span>
+        <span>正在检测设备环境...</span>
+      </li>
+    </ol>
+
+    <div class="servers" id="servers"></div>
+  </div>
+
+  <!-- ================= 下载界面 ================= -->
+  <div class="dialog" id="download-view" role="dialog" aria-live="polite" hidden>
+    <h1 class="dialog__title">正在下载资源</h1>
+    <p class="dialog__source">From：Pinkoc-Global-Japan-#4</p>
+    <p class="dialog__source">来自：Pinkoc-Global(全球)-日本4</p>
+
+    <div class="tasks">
+      <div class="task" id="task-0">
+        <div class="task__head">
+          <span class="task__name">main.pak</span>
+          <span class="task__pct" id="pct-0">0.0%</span>
+        </div>
+        <div class="bar"><div class="bar__fill" id="bar-0"></div></div>
+        <div class="task__foot">
+          <span id="size-0">0 KB / 103.7 MB</span>
+          <span id="speed-0">--</span>
+        </div>
+      </div>
+
+      <div class="task" id="task-1">
+        <div class="task__head">
+          <span class="task__name">photo.7z</span>
+          <span class="task__pct" id="pct-1">0.0%</span>
+        </div>
+        <div class="bar"><div class="bar__fill" id="bar-1"></div></div>
+        <div class="task__foot">
+          <span id="size-1">0 KB / 1.4 GB</span>
+          <span id="speed-1">--</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert" id="alert" hidden>
+      <span class="alert__label">下载失败</span>
+      <span class="alert__code">502</span>
+    </div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  var KB = 1024;
+  var MB = 1024 * KB;
+  var GB = 1024 * MB;
+
+  function $(id) { return document.getElementById(id); }
+
+  function randomBetween(min, max) {
+    return min + Math.random() * (max - min);
+  }
+
+  function clamp(v, min, max) {
+    return v < min ? min : (v > max ? max : v);
+  }
+
+  /* =========================================================
+     第一阶段：加载流程
+     ========================================================= */
+
+  var SERVERS = [
+    '香港2', '香港3', '香港4',
+    '杭州1',
+    '日本3', '日本10',
+    '法国1', '法国2'
+  ];
+  for (var s = 1; s <= 10; s++) SERVERS.push('美国' + s);
+
+  var PHASES = [
+    { min: 3000,  max: 10000 },   // 正在获取可用服务器...
+    { min: 5000,  max: 10000 },   // 正在从 Pinkoc 服务器拉取请求...
+    { min: 10000, max: 15000 }    // 正在检测设备环境...
+  ];
+
+  var serverListEl = $('servers');
+  var latencyEls = [];
+  var probingStarted = false;
+
+  function setStepState(index, state) {
+    var el = $('step-' + index);
+    el.classList.remove('is-active', 'is-done');
+    if (state) el.classList.add('is-' + state);
+  }
+
+  function probe(el) {
+    el.textContent = Math.round(randomBetween(18, 180)) + ' ms';
+  }
+
+  function addServer(name) {
+    var row = document.createElement('div');
+    row.className = 'server';
+
+    var nameEl = document.createElement('span');
+    nameEl.className = 'server__name';
+    nameEl.textContent = name;
+
+    var latencyEl = document.createElement('span');
+    latencyEl.className = 'server__latency';
+    latencyEl.textContent = '探测中';
+
+    row.appendChild(nameEl);
+    row.appendChild(latencyEl);
+    serverListEl.appendChild(row);
+    serverListEl.scrollTop = serverListEl.scrollHeight;
+
+    if (probingStarted) {
+      setTimeout(function () { probe(latencyEl); }, randomBetween(200, 600));
+    }
+
+    latencyEls.push(latencyEl);
+  }
+
+  function discoverServers(duration) {
+    var gap = duration / (SERVERS.length + 1);
+    SERVERS.forEach(function (name, i) {
+      setTimeout(function () { addServer(name); }, gap * (i + 1));
+    });
+  }
+
+  function probeServers(duration) {
+    probingStarted = true;
+    var gap = duration / (latencyEls.length + 1);
+    latencyEls.forEach(function (el, i) {
+      setTimeout(function () { probe(el); }, gap * (i + 1));
+    });
+  }
+
+  function runPhase(index) {
+    if (index >= PHASES.length) {
+      startDownloadView();
+      return;
+    }
+
+    setStepState(index, 'active');
+
+    var duration = randomBetween(PHASES[index].min, PHASES[index].max);
+
+    if (index === 0) discoverServers(duration);
+    if (index === 1) probeServers(duration);
+
+    setTimeout(function () {
+      setStepState(index, 'done');
+      runPhase(index + 1);
+    }, duration);
+  }
+
+  /* =========================================================
+     第二阶段：下载流程
+     ========================================================= */
+
+  var TICK = 100;
+  var SPEED_MIN = 500 * KB;
+  var SPEED_MAX = 700 * KB;
+
+  var tasks = [
+    { size: 103.7 * MB, downloaded: 0, speed: 600 * KB, state: 'running' },
+    { size: 1.4 * GB,   downloaded: 0, speed: 620 * KB, state: 'running' }
+  ];
+
+  // 主资源在 10% ~ 30% 之间随机某个点失败
+  var failAt = 0.10 + Math.random() * 0.20;
+
+  var timer = null;
+  var finished = false;
+
+  function formatSize(bytes) {
+    if (bytes >= GB) return (bytes / GB).toFixed(1) + ' GB';
+    if (bytes >= MB) return (bytes / MB).toFixed(1) + ' MB';
+    return Math.round(bytes / KB) + ' KB';
+  }
+
+  function speedText(task) {
+    if (task.state === 'running') return Math.round(task.speed / KB) + ' KB/s';
+    if (task.state === 'failed')  return '已中止';
+    return '已暂停';
+  }
+
+  function render() {
+    for (var i = 0; i < tasks.length; i++) {
+      var task = tasks[i];
+      var pct = (task.downloaded / task.size) * 100;
+
+      $('bar-' + i).style.width = pct.toFixed(2) + '%';
+      $('pct-' + i).textContent = pct.toFixed(1) + '%';
+      $('size-' + i).textContent = formatSize(task.downloaded) + ' / ' + formatSize(task.size);
+      $('speed-' + i).textContent = speedText(task);
+    }
+  }
+
+  function step() {
+    var dt = TICK / 1000;
+
+    for (var i = 0; i < tasks.length; i++) {
+      var task = tasks[i];
+      if (task.state !== 'running') continue;
+
+      // 速度在 500 KB/s ~ 700 KB/s 之间平滑抖动
+      task.speed = clamp(
+        task.speed + (Math.random() - 0.5) * 120 * KB,
+        SPEED_MIN,
+        SPEED_MAX
+      );
+
+      task.downloaded = Math.min(task.size, task.downloaded + task.speed * dt);
+    }
+
+    render();
+
+    if (tasks[0].downloaded / tasks[0].size >= failAt) {
+      triggerFailure();
+    }
+  }
+
+  function triggerFailure() {
+    if (finished) return;
+    finished = true;
+    clearInterval(timer);
+
+    tasks[0].state = 'failed';
+    tasks[1].state = 'paused';
+
+    $('task-0').classList.add('is-error');
+    $('task-1').classList.add('is-paused');
+
+    render();
+
+    $('alert').hidden = false;
+    document.title = '下载失败';
+  }
+
+  function startDownloadView() {
+    $('loading-view').hidden = true;
+    $('download-view').hidden = false;
+    document.title = '下载中';
+
+    render();
+    timer = setInterval(step, TICK);
+  }
+
+  /* =========================================================
+     启动
+     ========================================================= */
+
+  runPhase(0);
+})();
+</script>
+</body>
+</html>
