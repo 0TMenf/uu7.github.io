@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>迷你世界 Web(#0TMenf/dev)</title>
+<link rel="stylesheet" href="./style.css" />
+<link rel="stylesheet" href="./codex.css" />
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="game"></canvas>
+</div>
+
+<!-- ===================== 主界面 ===================== -->
+<div id="lobby" class="lobby">
+  <div class="lobby-bg"></div>
+  <div class="lobby-shade"></div>
+
+  <div class="lobby-top">
+    <button id="loginBtn" class="round-btn" title="账号">
+      <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true">
+        <path d="M12 12.2a4.1 4.1 0 1 0 0-8.2 4.1 4.1 0 0 0 0 8.2Zm0 2.1c-4.05 0-7.2 2.25-7.2 5.05V21h14.4v-1.65c0-2.8-3.15-5.05-7.2-5.05Z" fill="currentColor"/>
+      </svg>
+      <span>登录</span>
+    </button>
+    <button id="noticeBtn" class="round-btn" title="公告">
+      <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true">
+        <path d="M4 9.6v4.8h3.1l5.4 4.1V5.5L7.1 9.6H4Z" fill="currentColor"/>
+        <path d="M15.8 8.4a5.2 5.2 0 0 1 0 7.2M18.2 6a8.4 8.4 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+      </svg>
+      <span>公告</span>
+    </button>
+  </div>
+
+  <button id="startBtn" class="start-btn">点击进入游戏</button>
+
+  <!-- 主界面菜单：点「点击进入游戏」后展开 -->
+  <div id="mainMenu" class="mainmenu hidden">
+    <div class="mm-head">
+      <h2>开始你的世界</h2>
+      <p>选一个入口，随时可以回到这里</p>
+    </div>
+    <div class="mm-cards">
+      <button class="mm-card" data-mode="solo">
+        <span class="mm-ico">▶</span>
+        <b>开始游戏</b>
+        <em>单人创造，一个人慢慢造</em>
+      </button>
+      <button class="mm-card" data-mode="multi">
+        <span class="mm-ico">◍</span>
+        <b>联机大厅</b>
+        <em>和朋友进同一个世界</em>
+      </button>
+      <button class="mm-card soon" data-mode="workshop">
+        <span class="mm-ico">✦</span>
+        <b>创意工坊</b>
+        <em>建设中</em>
+      </button>
+      <button class="mm-card soon" data-mode="home">
+        <span class="mm-ico">⌂</span>
+        <b>家园</b>
+        <em>建设中</em>
+      </button>
+    </div>
+    <button id="mmBack" class="mm-back">返回</button>
+  </div>
+
+  <div id="sparkles" class="sparkles" aria-hidden="true"></div>
+  <div id="leaves" class="leafbox" aria-hidden="true"></div>
+
+  <div class="lobby-foot">
+    请您确定已如实进行实名注册。为了您的健康，请合理控制游戏时间劳逸结合。<br />
+    抵制不良游戏，拒绝盗版游戏。适度游戏益脑，沉迷游戏伤身。
+  </div>
+
+  <!-- 加载层 -->
+  <div id="loading" class="loading">
+    <div class="load-bar"><i id="loadFill"></i></div>
+    <div class="load-text">世界方块正在拼命加载中... <b id="loadPct">0</b> %</div>
+  </div>
+
+  <!-- 昵称 -->
+  <div id="nameDialog" class="modal hidden">
+    <div class="modal-card">
+      <h3>起个名字</h3>
+      <p>这个名字会显示在玩家列表里，随时可以改。</p>
+      <input id="nameInput" type="text" maxlength="16" placeholder="输入昵称" autocomplete="off" spellcheck="false" />
+
+      <div class="mode-pick">
+        <button class="mode-btn on" data-mode="creative">
+          <b>创造</b><em>无限方块 · 瞬间破坏 · 可飞行</em>
+        </button>
+        <button class="mode-btn" data-mode="survival">
+          <b>生存</b><em>挖掘耗时 · 会摔伤 · 有生命值</em>
+        </button>
+      </div>
+      <button id="enterBtn" class="play">进入世界</button>
+      <button id="cancelName" class="ghost-link">返回</button>
+      <div id="lobbyMsg" class="msg"></div>
+    </div>
+  </div>
+
+  <!-- 公告 -->
+  <div id="noticeDialog" class="modal hidden">
+    <div class="modal-card notice-card">
+      <h3>公告</h3>
+      <div class="notice-body">
+        <p>这是自己搭的迷你世界服务端，跑在浏览器里，打开网址就能玩。</p>
+        <p>世界种子和方块改动都存在服务器上，关掉浏览器也不会丢。</p>
+        <p>操作：WASD 移动，空格跳，左键挖，右键放，T 聊天，Esc 暂停。</p>
+      </div>
+      <button id="closeNotice" class="play">知道了</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 游戏内 HUD ===================== -->
+<div id="hud" class="hud hidden">
+
+  <div id="fpsBadge" class="fps-badge">FPS : 0</div>
+
+  <div id="crosshair" class="crosshair"><i></i><i></i></div>
+
+    <div class="topbar">
+    <div class="roominfo">
+      <span class="dot"></span>
+      <span id="onlineCount">1 人在线</span>
+    </div>
+    <div class="topright">
+      <div class="clockbox">
+        <i id="dayIcon"></i>
+        <span id="clockText">08:00</span>
+      </div>
+      <button id="btnHelp" class="icon-btn" title="操作说明">?</button>
+    </div>
+  </div>
+
+  <div id="playerList" class="playerlist"></div>
+
+  <div id="toast" class="toast"></div>
+
+  <div class="bottom">
+    <div id="healthBar" class="healthbar hidden">
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    </div>
+
+    <div id="slotLabel" class="slot-label"></div>
+
+    <div class="hotbar-row">
+      <div id="hotbar" class="hotbar"></div>
+      <button id="invBtn" class="inv-btn" title="背包（E）">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path d="M8.4 6.4V5.2A3.2 3.2 0 0 1 11.6 2h.8a3.2 3.2 0 0 1 3.2 3.2v1.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <rect x="3.6" y="6.4" width="16.8" height="14.4" rx="3.4" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M3.6 11.6h16.8" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M10.2 11.6v2.2h3.6v-2.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button id="codexBtn" class="inv-btn cx-codex-btn" title="原版图鉴（C）">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path d="M4 4.5h6.2A2.8 2.8 0 0 1 13 7.3V20a2.4 2.4 0 0 0-2.4-2.4H4Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+          <path d="M20 4.5h-6.2A2.8 2.8 0 0 0 11 7.3V20a2.4 2.4 0 0 1 2.4-2.4H20Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="hintbar">
+      <kbd>WASD</kbd> 移动
+      <kbd>空格</kbd> 跳
+      <kbd>Shift</kbd> 加速
+      <kbd>左键</kbd> 挖
+      <kbd>右键</kbd> 放
+      <kbd>1-9</kbd> 选方块
+      <kbd>E</kbd> 背包
+      <kbd>C</kbd> 图鉴
+      <kbd>T</kbd> 聊天
+      <kbd>Esc</kbd> 退出鼠标锁定
+    </div>
+  </div>
+
+  <div id="chatBox" class="chatbox">
+    <div id="chatLog" class="chatlog"></div>
+    <form id="chatForm" class="chatform hidden">
+      <input id="chatInput" type="text" maxlength="120" placeholder="说点什么…" autocomplete="off" />
+    </form>
+  </div>
+
+  <div id="debug" class="debug"></div>
+
+  <div id="paused" class="paused hidden">
+    <div class="paused-card">
+      <h2>已暂停</h2>
+      <p>鼠标已解锁。点击画面继续游戏。</p>
+      <button id="resumeBtn" class="play small">继续游玩</button>
+      <button id="settingsBtn" class="ghost-link">设置</button>
+      <button id="toLobbyBtn" class="ghost-link danger">返回主界面</button>
+    </div>
+  </div>
+
+  <div id="settings" class="settings hidden">
+    <div class="settings-card">
+      <div class="settings-head">
+        <h2>设置</h2>
+        <button id="closeSettings" class="icon-btn">×</button>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">主音量</div>
+          <div class="setting-desc">挖掘、放置与环境音的音量</div>
+        </div>
+        <div class="setting-ctl">
+          <input id="volRange" type="range" min="0" max="100" step="5" value="70" />
+          <span id="volVal" class="setting-val">70</span>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">鼠标灵敏度</div>
+          <div class="setting-desc">转动视角的速度</div>
+        </div>
+        <div class="setting-ctl">
+          <input id="sensRange" type="range" min="20" max="220" step="5" value="100" />
+          <span id="sensVal" class="setting-val">100%</span>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">视距</div>
+          <div class="setting-desc">看多远。调大更远，也更吃显卡</div>
+        </div>
+        <div class="setting-ctl">
+          <input id="viewRange" type="range" min="2" max="16" step="1" value="3" />
+          <span id="viewVal" class="setting-val">3 区块</span>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">超远视距</div>
+          <div class="setting-desc">固定 24 区块（384 格），截图与压力测试用。首次加载约 10 秒，显存约 500MB</div>
+        </div>
+        <button id="extremeToggle" class="switch" aria-label="超远视距"><i></i></button>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">画面质量</div>
+          <div class="setting-desc">流畅：无阴影；均衡：阴影 1024；精细：阴影 2048</div>
+        </div>
+        <div class="setting-ctl">
+          <div class="seg" id="qualitySeg">
+            <button data-q="0.75">流畅</button>
+            <button data-q="1" class="on">均衡</button>
+            <button data-q="1.35">精细</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">垂直同步</div>
+          <div class="setting-desc">关闭后帧率不受屏幕刷新率限制，可能更流畅，但画面会撕裂</div>
+        </div>
+        <button id="vsyncToggle" class="switch on" aria-label="垂直同步"><i></i></button>
+      </div>
+
+      <div class="settings-foot">
+        <span id="vsyncState" class="settings-hint">当前：跟随刷新率</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="help" class="help hidden">
+    <div class="help-card">
+      <h2>怎么玩</h2>
+      <ul>
+        <li><b>移动</b>　WASD 或方向键，Shift 加速跑</li>
+        <li><b>跳跃</b>　空格</li>
+        <li><b>挖掘</b>　按住左键，石头比泥土慢得多</li>
+        <li><b>放置</b>　对着方块按右键</li>
+        <li><b>选方块</b>　数字键 1-9、滚轮，或按 <b>E</b> 打开背包</li>
+        <li><b>图鉴</b>　按 <b>C</b>：物品、合成、生物、粒子、电路都能查，还能一键放进世界</li>
+        <li><b>电路</b>　图鉴「电路」页放一条演示电路；对着开关按右键切换通断</li>
+        <li><b>聊天</b>　按 T，回车发送</li>
+      </ul>
+      <p class="tip">你的每一次挖掘和放置都会立刻同步给同房间的其他人。</p>
+      <button id="closeHelp" class="play small">知道了</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 背包 ===================== -->
+<div id="bag" class="bag hidden">
+  <div class="bag-panel">
+    <div class="bag-head">
+      <div class="bag-title">
+        <b>背包</b>
+        <span id="bagHint">点击物品放进选中的格子</span>
+      </div>
+
+      <div class="bag-search">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <circle cx="10.6" cy="10.6" r="6.4" fill="none" stroke="currentColor" stroke-width="1.9"/>
+          <path d="m15.4 15.4 4.2 4.2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+        </svg>
+        <input id="bagSearch" type="text" placeholder="搜索方块，中英文都行" autocomplete="off" spellcheck="false" />
+        <button id="bagClear" class="bag-clear hidden" title="清空">×</button>
+      </div>
+
+      <button id="bagClose" class="bag-close" title="关闭（Esc）">×</button>
+    </div>
+
+    <div class="bag-body">
+      <aside id="bagCats" class="bag-cats"></aside>
+
+      <div class="bag-main">
+        <div id="bagGrid" class="bag-grid"></div>
+        <div id="bagEmpty" class="bag-empty hidden">没有找到匹配的方块</div>
+      </div>
+
+      <aside class="bag-side">
+        <div id="bagDetail" class="bag-detail"></div>
+      </aside>
+    </div>
+
+    <div class="bag-foot">
+      <span id="bagCount" class="bag-count">0 个方块</span>
+      <div id="bagHotbar" class="bag-hotbar"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 原版内容图鉴 ===================== -->
+<div id="codex" class="codex hidden"></div>
+
+<script src="./vendor/three.min.js"></script>
+<script src="./js/blocks.js"></script>
+<script src="./js/world.js"></script>
+<script src="./js/daylight.js"></script>
+<script src="./js/sfx.js"></script>
+<script src="./js/player.js"></script>
+<script src="./js/net.js"></script>
+<script src="./js/lobby.js"></script>
+<script src="./js/content.js"></script>
+<script src="./js/redstone.js"></script>
+<script src="./js/particles.js"></script>
+<script src="./js/inventory.js"></script>
+<script src="./js/mobs.js"></script>
+<script src="./js/bag.js"></script>
+<script src="./js/codex.js"></script>
+<script src="./js/main.js"></script>
+</body>
+</html>
